@@ -7,7 +7,7 @@ import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
-import org.apache.flink.table.descriptors.Csv;
+//import org.apache.flink.table.descriptors.Csv;
 import org.apache.flink.table.descriptors.FileSystem;
 import org.apache.flink.table.descriptors.Rowtime;
 import org.apache.flink.table.descriptors.Schema;
@@ -36,23 +36,23 @@ public class UserBehaviorFromFile {
                 .getPath();
 
         // connect()方法定义数据源未来将被废弃，以后主要使用SQL DDL
-        tEnv.connect(new FileSystem().path(filePath))
-        .withFormat(new Csv())
-        .withSchema(schema)
-        .createTemporaryTable("user_behavior");
-
-        Table userBehaviorTable = tEnv.from("user_behavior");
-        Table groupByUser = userBehaviorTable.groupBy("user_id").select("user_id, COUNT(behavior) as cnt");
-
-        Table groupByUserId = tEnv.sqlQuery("SELECT user_id, COUNT(behavior) AS cnt FROM user_behavior GROUP BY user_id");
-
-        Table tumbleGroupByUserId = tEnv.sqlQuery("" +
-                "SELECT user_id, TUMBLE_END(ts, INTERVAL '5' MINUTE) AS endTs, COUNT(behavior) AS cnt " +
-                "FROM user_behavior " +
-                "GROUP BY user_id, TUMBLE(ts, INTERVAL '5' MINUTE)");
-
-        DataStream<Tuple2<Boolean, Row>> result = tEnv.toRetractStream(tumbleGroupByUserId, Row.class);
-        result.print();
+//        tEnv.connect(new FileSystem().path(filePath))
+//        .withFormat(new Csv())
+//        .withSchema(schema)
+//        .createTemporaryTable("user_behavior");
+//
+//        Table userBehaviorTable = tEnv.from("user_behavior");
+//        Table groupByUser = userBehaviorTable.groupBy("user_id").select("user_id, COUNT(behavior) as cnt");
+//
+//        Table groupByUserId = tEnv.sqlQuery("SELECT user_id, COUNT(behavior) AS cnt FROM user_behavior GROUP BY user_id");
+//
+//        Table tumbleGroupByUserId = tEnv.sqlQuery("" +
+//                "SELECT user_id, TUMBLE_END(ts, INTERVAL '5' MINUTE) AS endTs, COUNT(behavior) AS cnt " +
+//                "FROM user_behavior " +
+//                "GROUP BY user_id, TUMBLE(ts, INTERVAL '5' MINUTE)");
+//
+//        DataStream<Tuple2<Boolean, Row>> result = tEnv.toRetractStream(tumbleGroupByUserId, Row.class);
+//        result.print();
 
 
         env.execute("table api");
