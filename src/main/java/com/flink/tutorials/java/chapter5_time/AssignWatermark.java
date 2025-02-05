@@ -1,18 +1,21 @@
 package com.flink.tutorials.java.chapter5_time;
 
+import cn.hutool.core.date.DatePattern;
+import cn.hutool.core.date.DateUtil;
+import com.flink.tutorials.java.bean.Event;
 import org.apache.flink.api.common.eventtime.Watermark;
 import org.apache.flink.api.common.eventtime.WatermarkGenerator;
 import org.apache.flink.api.common.eventtime.WatermarkOutput;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.api.common.typeinfo.Types;
-import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.RestOptions;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
-import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
+import org.apache.flink.streaming.api.functions.source.SourceFunction;
+import org.apache.flink.util.Collector;
+import java.util.Date;
 
 public class AssignWatermark {
 
@@ -27,43 +30,37 @@ public class AssignWatermark {
 
         // 每隔一定时间生成一个Watermark
         env.getConfig().setAutoWatermarkInterval(1000L);
-        DataStream<String> socketSource = env.socketTextStream("localhost", 9000);
-        DataStream<Tuple3<String, Long, Long>> input = socketSource.map(
-                line -> {
-                    String[] arr = line.split(" ");
-                    String id = arr[0];
-                    long time = Long.parseLong(arr[1]);
-                    return Tuple3.of(id, 1L, time);
-                })
-                .returns(Types.TUPLE(Types.STRING, Types.LONG, Types.LONG));
-
-        DataStream<Tuple3<String, Long, Long>> watermark = input.assignTimestampsAndWatermarks(
-                WatermarkStrategy.forGenerator((context -> new MyPeriodicGenerator()))
-                        .withTimestampAssigner((event, recordTimestamp) -> event.f2)
+        DataStream<Event> input = env.addSource(new EventSourceFunction());
+        DataStream<Event> watermark = input.assignTimestampsAndWatermarks(
+//                WatermarkStrategy.forGenerator((context -> new MyPeriodicGenerator()))
+                WatermarkStrategy.forGenerator((context -> new MyPunctuatedGenerator()))
+                        .withTimestampAssigner((event, recordTimestamp) -> event.getTimestamp())
         );
 
-
-        DataStream<Tuple3<String, Long, Long>> wordcount = watermark.keyBy(0)
-                .window(TumblingEventTimeWindows.of(Time.seconds(10)))
-                .sum(1);
-
-        wordcount.print();
-
+        printWaterMark(watermark);
         env.execute("periodic and punctuated watermark");
     }
 
+    private static void printWaterMark(DataStream<Event> watermark) {
+        watermark.process(new ProcessFunction<Event, Long>() {
+
+            @Override
+            public void processElement(Event value, ProcessFunction<Event, Long>.Context ctx, Collector<Long> out) throws Exception {
+                long currentWatermark = ctx.timerService().currentWatermark();
+                String formatted = DateUtil.format(new Date(currentWatermark), DatePattern.NORM_DATETIME_MS_PATTERN);
+                System.out.println("currentWatermark:" + formatted);
+            }
+        });
+    }
+
     // 定期生成Watermark
-    // 数据流元素 Tuple2<String, Long, Long> 共三个字段
-    // 第一个字段为单词
-    // 第二个字段为词频
-    // 第三个字段是时间戳
-    public static class MyPeriodicGenerator implements WatermarkGenerator<Tuple3<String, Long, Long>> {
+    public static class MyPeriodicGenerator implements WatermarkGenerator<Event> {
 
         private final long maxOutOfOrderness = 5 * 1000; // 5 秒钟
         private long currentMaxTimestamp;                 // 已抽取的Timestamp最大值
 
         @Override
-        public void onEvent(Tuple3<String, Long, Long> event, long eventTimestamp, WatermarkOutput output) {
+        public void onEvent(Event event, long eventTimestamp, WatermarkOutput output) {
             // 更新currentMaxTimestamp为当前遇到的最大值
             currentMaxTimestamp = Math.max(currentMaxTimestamp, eventTimestamp);
         }
@@ -77,17 +74,11 @@ public class AssignWatermark {
     }
 
     // 逐个检查数据流中的元素，根据元素中的特殊字段，判断是否要生成Watermark
-    // 数据流元素 Tuple3<String, Long, Boolean> 共三个字段
-    // 第一个字段为数据本身
-    // 第二个字段是时间戳
-    // 第三个字段判断是否为Watermark的标记
-    public static class MyPunctuatedGenerator implements WatermarkGenerator<Tuple3<String, Long, Boolean>> {
+    public static class MyPunctuatedGenerator implements WatermarkGenerator<Event> {
 
         @Override
-        public void onEvent(Tuple3<String, Long, Boolean> event, long eventTimestamp, WatermarkOutput output) {
-            if (event.f2) {
-                output.emitWatermark(new Watermark(event.f1));
-            }
+        public void onEvent(Event event, long eventTimestamp, WatermarkOutput output) {
+            output.emitWatermark(new Watermark(event.getTimestamp()));
         }
 
         @Override
@@ -95,5 +86,30 @@ public class AssignWatermark {
             // 这里不需要做任何事情，因为我们在 onEvent() 方法中生成了Watermark
         }
 
+    }
+
+    // 自定义事件源函数，模拟生成事件流
+    public static class EventSourceFunction implements SourceFunction<Event> {
+
+        @Override
+        public void run(SourceContext<Event> ctx) throws InterruptedException {
+            // 模拟事件按顺序发送
+            ctx.collect(new Event(1736991168000L)); //2025-01-16 09:32:48
+            mockSleep();
+            ctx.collect(new Event(1736991348000L)); //2025-01-16 09:35:48
+            mockSleep();
+            ctx.collect(new Event(1736991588000L)); //2025-01-16 09:39:48
+            while (true) {}
+        }
+
+        private void mockSleep() throws InterruptedException {
+            long sleep = 1000L;
+            Thread.sleep(sleep);
+        }
+
+        @Override
+        public void cancel() {
+
+        }
     }
 }

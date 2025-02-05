@@ -32,6 +32,10 @@ public class Event {
         this.name = name;
     }
 
+    public Event(long timestamp) {
+        this.timestamp = timestamp;
+    }
+
     public String getName() {
         return name;
     }
