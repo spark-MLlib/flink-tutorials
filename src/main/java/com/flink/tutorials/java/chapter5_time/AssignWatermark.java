@@ -33,8 +33,10 @@ public class AssignWatermark {
         DataStream<Event> input = env.addSource(new EventSourceFunction());
         DataStream<Event> watermark = input.assignTimestampsAndWatermarks(
 //                WatermarkStrategy.forGenerator((context -> new MyPeriodicGenerator()))
-                WatermarkStrategy.forGenerator((context -> new MyPunctuatedGenerator()))
+//                WatermarkStrategy.forGenerator((context -> new MyPunctuatedGenerator()))
+                WatermarkStrategy.forGenerator((context -> new CustomPeriodicWatermarkGenerator<Event>(10000, 0)))
                         .withTimestampAssigner((event, recordTimestamp) -> event.getTimestamp())
+//                        .withIdleness(Duration.ofSeconds(10))
         );
 
         printWaterMark(watermark);
@@ -50,7 +52,7 @@ public class AssignWatermark {
                 String formatted = DateUtil.format(new Date(currentWatermark), DatePattern.NORM_DATETIME_MS_PATTERN);
                 System.out.println("currentWatermark:" + formatted);
             }
-        });
+        }).name("printWaterMark");
     }
 
     // 定期生成Watermark
