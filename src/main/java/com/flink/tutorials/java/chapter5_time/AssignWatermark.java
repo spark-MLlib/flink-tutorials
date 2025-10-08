@@ -15,6 +15,7 @@ import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.util.Collector;
+import java.time.Duration;
 import java.util.Date;
 
 public class AssignWatermark {
@@ -34,9 +35,9 @@ public class AssignWatermark {
         DataStream<Event> watermark = input.assignTimestampsAndWatermarks(
 //                WatermarkStrategy.forGenerator((context -> new MyPeriodicGenerator()))
 //                WatermarkStrategy.forGenerator((context -> new MyPunctuatedGenerator()))
-                WatermarkStrategy.forGenerator((context -> new CustomPeriodicWatermarkGenerator<Event>(10000, 0)))
+                WatermarkStrategy.forGenerator((context -> new CustomPeriodicWatermarkGenerator<Event>(Duration.ofMillis(10000), Duration.ofMillis(0))))
                         .withTimestampAssigner((event, recordTimestamp) -> event.getTimestamp())
-//                        .withIdleness(Duration.ofSeconds(10))
+                        .withIdleness(Duration.ofMillis(10000))
         );
 
         printWaterMark(watermark);
